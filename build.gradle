@@ -13,7 +13,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.geysermc.mcprotocollib:protocol:1.21.7-SNAPSHOT'
+    implementation 'org.geysermc.mcprotocollib:protocol:1.21.11-SNAPSHOT'
     implementation 'net.kyori:adventure-text-serializer-gson:4.24.0'
     implementation 'commons-cli:commons-cli:1.9.0'
     implementation 'com.diogonunes:JColor:5.5.1'
@@ -24,7 +24,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 

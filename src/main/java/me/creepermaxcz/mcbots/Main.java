@@ -2,8 +2,10 @@ package me.creepermaxcz.mcbots;
 
 import net.lenni0451.commons.httpclient.HttpClient;
 import net.raphimc.minecraftauth.MinecraftAuth;
-import net.raphimc.minecraftauth.step.java.session.StepFullJavaSession;
-import net.raphimc.minecraftauth.step.msa.StepMsaDeviceCode;
+import net.raphimc.minecraftauth.java.JavaAuthManager;
+import net.raphimc.minecraftauth.java.model.MinecraftProfile;
+import net.raphimc.minecraftauth.msa.model.MsaDeviceCode;
+import net.raphimc.minecraftauth.msa.service.impl.DeviceCodeMsaAuthService;
 import org.geysermc.mcprotocollib.auth.GameProfile;
 import org.geysermc.mcprotocollib.network.ProxyInfo;
 import org.geysermc.mcprotocollib.protocol.MinecraftProtocol;
@@ -23,6 +25,7 @@ import java.io.*;
 import java.net.*;
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -277,18 +280,17 @@ public class Main {
             botCount = 1;
 
             HttpClient httpClient = MinecraftAuth.createHttpClient();
-            StepFullJavaSession.FullJavaSession javaSession =
-                    MinecraftAuth.JAVA_DEVICE_CODE_LOGIN.getFromInput(
-                            httpClient, new StepMsaDeviceCode.MsaDeviceCodeCallback(
-                                    msaDeviceCode -> {
+            JavaAuthManager authManager = JavaAuthManager.create(httpClient)
+                    .login(DeviceCodeMsaAuthService::new, (Consumer<MsaDeviceCode>) msaDeviceCode -> {
                 Log.info("Authorize your Microsoft account on " + msaDeviceCode.getDirectVerificationUri());
                 Log.info("Waiting for authorization.");
-            }));
+            });
 
-            Log.info("Logged in with username: " + javaSession.getMcProfile().getName());
+            MinecraftProfile mcProfile = authManager.getMinecraftProfile().getUpToDate();
+            Log.info("Logged in with username: " + mcProfile.getName());
 
-            GameProfile gameProfile = new GameProfile(javaSession.getMcProfile().getId(), javaSession.getMcProfile().getName());
-            protocol = new MinecraftProtocol(gameProfile, javaSession.getMcProfile().getMcToken().getAccessToken());
+            GameProfile gameProfile = new GameProfile(mcProfile.getId(), mcProfile.getName());
+            protocol = new MinecraftProtocol(gameProfile, authManager.getMinecraftToken().getUpToDate().getToken());
         } else {
             protocol = null;
         }
