@@ -48,6 +48,8 @@ public class Main {
     public static String prompt = "?";
 
     public static int autoRespawnDelay = 100;
+    public static int keepAlive = -1;
+
     private static boolean useProxies = false;
     private static final ArrayList<InetSocketAddress> proxies = new ArrayList<>();
     private static int proxyIndex = 0;
@@ -56,7 +58,7 @@ public class Main {
 
     private static final String CLIENT_ID = "8bef943e-5a63-429e-a93a-96391d2e32a9";
 
-    private static Timer timer = new Timer();
+    public static Timer timer = new Timer();
     private static final HashSet<Bot> controlledBots = new HashSet<>();
 
     public static void main(String[] args) throws Exception {
@@ -93,6 +95,8 @@ public class Main {
 
         options.addOption("v", "version", true, "Minecraft version (e.g. 1.20.4) or protocol version (integer, e.g. 765)");
 
+        options.addOption(null, "time", true, "Time in seconds what bots will be connected before disconnecting");
+
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
 
@@ -105,6 +109,10 @@ public class Main {
         }
 
         autoRespawnDelay = Integer.parseInt(cmd.getOptionValue("ar", "100"));
+
+        if (cmd.hasOption("time")) {
+            keepAlive = Integer.parseInt(cmd.getOptionValue("time"));
+        }
 
         if (cmd.hasOption('t') && cmd.hasOption('l')) {
             String typeStr = cmd.getOptionValue('t').toUpperCase();

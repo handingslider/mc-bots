@@ -43,6 +43,8 @@ public class Bot extends Thread {
 
     private boolean manualDisconnecting = false;
 
+    private TimerTask disconnectTask;
+
     public Bot(MinecraftProtocol protocol, InetSocketAddress address, ProxyInfo proxy) {
         this.nickname = protocol.getProfile().getName();
         this.address = address;
@@ -138,11 +140,26 @@ public class Bot extends Thread {
                         Log.info();
                     }
 
+                    if (disconnectTask != null) {
+                        disconnectTask.cancel();
+                    }
+
                     Main.removeBot(Bot.this);
 
                     Thread.currentThread().interrupt();
                 }
             });
+        }
+
+        if (Main.keepAlive > 0) {
+            disconnectTask = new TimerTask() {
+                @Override
+                public void run() {
+                    Log.info("Bot " + nickname + " reached time limit. Disconnecting.");
+                    disconnect();
+                }
+            };
+            Main.timer.schedule(disconnectTask, Main.keepAlive * 1000L);
         }
 
         client.connect();
