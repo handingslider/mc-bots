@@ -9,6 +9,8 @@ import net.raphimc.minecraftauth.msa.service.impl.DeviceCodeMsaAuthService;
 import org.geysermc.mcprotocollib.auth.GameProfile;
 import org.geysermc.mcprotocollib.network.ProxyInfo;
 import org.geysermc.mcprotocollib.protocol.MinecraftProtocol;
+import org.geysermc.mcprotocollib.protocol.codec.MinecraftCodec;
+import org.geysermc.mcprotocollib.protocol.codec.PacketCodec;
 import org.geysermc.mcprotocollib.protocol.data.status.ServerStatusInfo;
 import org.apache.commons.cli.*;
 import org.jline.reader.LineReader;
@@ -46,7 +48,6 @@ public class Main {
     public static String prompt = "?";
 
     public static int autoRespawnDelay = 100;
-
     private static boolean useProxies = false;
     private static final ArrayList<InetSocketAddress> proxies = new ArrayList<>();
     private static int proxyIndex = 0;
@@ -89,6 +90,8 @@ public class Main {
         options.addOption("o", "online", false, "Use online mode (premium) account");
 
         options.addOption("ar", "auto-respawn", true, "Set autorespawn delay (-1 to disable)");
+
+        options.addOption("v", "version", true, "Minecraft version (e.g. 1.20.4) or protocol version (integer, e.g. 765)");
 
         CommandLineParser parser = new DefaultParser();
         CommandLine cmd = null;
@@ -274,6 +277,18 @@ public class Main {
             Log.warn("There was an error retrieving server status information. The server may be offline or running on a different version.");
         }
 
+        PacketCodec codec = MinecraftCodec.CODEC;
+        if (cmd.hasOption("v")) {
+            String v = cmd.getOptionValue("v");
+            int protocolVersion = resolveProtocolVersion(v);
+            if (protocolVersion == -1) {
+                Log.error("Invalid protocol version: " + v + ". Provide an integer or a known version string.");
+                System.exit(1);
+            }
+            codec = codec.toBuilder().protocolVersion(protocolVersion).minecraftVersion(v).build();
+            Log.info("Using protocol version: " + protocolVersion);
+        }
+
         MinecraftProtocol protocol;
         if (cmd.hasOption("o")) {
             Log.warn("Online mode enabled. The bot count will be set to 1.");
@@ -290,10 +305,12 @@ public class Main {
             Log.info("Logged in with username: " + mcProfile.getName());
 
             GameProfile gameProfile = new GameProfile(mcProfile.getId(), mcProfile.getName());
-            protocol = new MinecraftProtocol(gameProfile, authManager.getMinecraftToken().getUpToDate().getToken());
+            protocol = new MinecraftProtocol(codec, gameProfile, authManager.getMinecraftToken().getUpToDate().getToken());
         } else {
             protocol = null;
         }
+
+        final PacketCodec finalCodec = codec;
 
         new Thread(() -> {
             for (int i = 0; i < botCount; i++) {
@@ -332,7 +349,7 @@ public class Main {
                         );
                     } else {
                         bot = new Bot(
-                                new MinecraftProtocol(nickGen.nextNick()),
+                                new MinecraftProtocol(finalCodec, nickGen.nextNick()),
                                 inetAddr,
                                 proxyInfo
                         );
@@ -557,6 +574,83 @@ public class Main {
         }
         else {
             return count + " BOTS";
+        }
+    }
+
+    public static int resolveProtocolVersion(String version) {
+        if (version.matches("\\d+")) {
+            return Integer.parseInt(version);
+        }
+        switch (version) {
+            case "1.21.2":
+            case "1.21.3":
+                return 768;
+            case "1.21":
+            case "1.21.1":
+                return 767;
+            case "1.20.5":
+            case "1.20.6":
+                return 766;
+            case "1.20.3":
+            case "1.20.4":
+                return 765;
+            case "1.20.2":
+                return 764;
+            case "1.20":
+            case "1.20.1":
+                return 763;
+            case "1.19.4":
+                return 762;
+            case "1.19.3":
+                return 761;
+            case "1.19.1":
+            case "1.19.2":
+                return 760;
+            case "1.19":
+                return 759;
+            case "1.18.2":
+                return 758;
+            case "1.18":
+            case "1.18.1":
+                return 757;
+            case "1.17.1":
+                return 756;
+            case "1.17":
+                return 755;
+            case "1.16.4":
+            case "1.16.5":
+                return 754;
+            case "1.16.3":
+                return 753;
+            case "1.16.2":
+                return 751;
+            case "1.16":
+            case "1.16.1":
+                return 736;
+            case "1.15.2":
+                return 578;
+            case "1.14.4":
+                return 498;
+            case "1.13.2":
+                return 393;
+            case "1.12.2":
+                return 340;
+            case "1.11.2":
+                return 316;
+            case "1.10.2":
+                return 210;
+            case "1.9.4":
+                return 110;
+            case "1.8.9":
+                return 47;
+            default:
+                if (version.startsWith("1.21")) return 767;
+                if (version.startsWith("1.20")) return 763;
+                if (version.startsWith("1.19")) return 759;
+                if (version.startsWith("1.18")) return 757;
+                if (version.startsWith("1.17")) return 755;
+                if (version.startsWith("1.16")) return 736;
+                return -1;
         }
     }
 }

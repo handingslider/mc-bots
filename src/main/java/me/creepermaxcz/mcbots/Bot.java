@@ -144,6 +144,7 @@ public class Bot extends Thread {
                 }
             });
         }
+
         client.connect();
     }
 
