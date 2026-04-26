@@ -93,7 +93,7 @@ public class Main {
 
         options.addOption("ar", "auto-respawn", true, "Set autorespawn delay (-1 to disable)");
 
-        options.addOption("v", "version", true, "Minecraft version (e.g. 1.20.4) or protocol version (integer, e.g. 765)");
+        options.addOption("v", "version", true, "Minecraft protocol version (integer, e.g. 765)");
 
         options.addOption(null, "time", true, "Time in seconds what bots will be connected before disconnecting");
 
@@ -288,13 +288,14 @@ public class Main {
         PacketCodec codec = MinecraftCodec.CODEC;
         if (cmd.hasOption("v")) {
             String v = cmd.getOptionValue("v");
-            int protocolVersion = resolveProtocolVersion(v);
-            if (protocolVersion == -1) {
-                Log.error("Invalid protocol version: " + v + ". Provide an integer or a known version string.");
+            try {
+                int protocolVersion = Integer.parseInt(v);
+                codec = codec.toBuilder().protocolVersion(protocolVersion).minecraftVersion(v).build();
+                Log.info("Using protocol version: " + protocolVersion);
+            } catch (NumberFormatException e) {
+                Log.error("Invalid protocol version: " + v + ". Provide an integer.");
                 System.exit(1);
             }
-            codec = codec.toBuilder().protocolVersion(protocolVersion).minecraftVersion(v).build();
-            Log.info("Using protocol version: " + protocolVersion);
         }
 
         MinecraftProtocol protocol;
@@ -585,80 +586,4 @@ public class Main {
         }
     }
 
-    public static int resolveProtocolVersion(String version) {
-        if (version.matches("\\d+")) {
-            return Integer.parseInt(version);
-        }
-        switch (version) {
-            case "1.21.2":
-            case "1.21.3":
-                return 768;
-            case "1.21":
-            case "1.21.1":
-                return 767;
-            case "1.20.5":
-            case "1.20.6":
-                return 766;
-            case "1.20.3":
-            case "1.20.4":
-                return 765;
-            case "1.20.2":
-                return 764;
-            case "1.20":
-            case "1.20.1":
-                return 763;
-            case "1.19.4":
-                return 762;
-            case "1.19.3":
-                return 761;
-            case "1.19.1":
-            case "1.19.2":
-                return 760;
-            case "1.19":
-                return 759;
-            case "1.18.2":
-                return 758;
-            case "1.18":
-            case "1.18.1":
-                return 757;
-            case "1.17.1":
-                return 756;
-            case "1.17":
-                return 755;
-            case "1.16.4":
-            case "1.16.5":
-                return 754;
-            case "1.16.3":
-                return 753;
-            case "1.16.2":
-                return 751;
-            case "1.16":
-            case "1.16.1":
-                return 736;
-            case "1.15.2":
-                return 578;
-            case "1.14.4":
-                return 498;
-            case "1.13.2":
-                return 393;
-            case "1.12.2":
-                return 340;
-            case "1.11.2":
-                return 316;
-            case "1.10.2":
-                return 210;
-            case "1.9.4":
-                return 110;
-            case "1.8.9":
-                return 47;
-            default:
-                if (version.startsWith("1.21")) return 767;
-                if (version.startsWith("1.20")) return 763;
-                if (version.startsWith("1.19")) return 759;
-                if (version.startsWith("1.18")) return 757;
-                if (version.startsWith("1.17")) return 755;
-                if (version.startsWith("1.16")) return 736;
-                return -1;
-        }
-    }
 }
