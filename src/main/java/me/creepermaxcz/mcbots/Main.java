@@ -316,7 +316,6 @@ public class Main {
         Log.info("Bot count: " + botCount);
 
         //get and print server info
-        InetSocketAddress originalAddr = inetAddr;
         if (cmd.hasOption("v")) {
             String v = cmd.getOptionValue("v");
             try {
