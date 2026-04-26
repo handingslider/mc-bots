@@ -33,9 +33,12 @@ java {
 }
 
 jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
-        attributes 'Main-Class': 'me.creepermaxcz.mcbots.Main'
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        attributes(
+            'Main-Class': 'me.creepermaxcz.mcbots.Main',
+            'Multi-Release': 'true'
+        )
     }
     from {
         configurations.runtimeClasspath.filter{ it.exists() }.collect { it.isDirectory() ? it : zipTree(it) }
