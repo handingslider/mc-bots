@@ -55,8 +55,8 @@ public class Main {
     private static int proxyIndex = 0;
     private static int proxyCount = 0;
     private static int[] pooledProxyPorts;
+    private static final List<Process> viaProcesses = new ArrayList<>();
     private static ProxyInfo.Type proxyType;
-
     private static final String CLIENT_ID = "8bef943e-5a63-429e-a93a-96391d2e32a9";
     
     private static String resolveVersionName(String version) {
@@ -331,32 +331,41 @@ public class Main {
                     }
                 }
                 
+                // Add shutdown hook to kill processes
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    for (Process p : viaProcesses) {
+                        p.destroy();
+                    }
+                }));
+
                 for (int i = 0; i < poolSize; i++) {
                     final int finalProxyPort = proxyPorts[i];
-                    Thread proxyThread = new Thread(() -> {
-                        try {
-                            List<String> viaArgs = new ArrayList<>(Arrays.asList(
-                                "cli", 
-                                "--bind-address", "127.0.0.1:" + finalProxyPort, 
-                                "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort(),
-                                "--target-version", resolveVersionName(v)
-                            ));
-                            
-                            if (useProxies && proxyCount > 0) {
-                                InetSocketAddress p = proxies.get(random.nextInt(proxyCount));
-                                String scheme = proxyType.name().toLowerCase();
-                                if (scheme.equals("socks")) scheme = "socks5";
-                                viaArgs.add("--backend-proxy-url");
-                                viaArgs.add(scheme + "://" + p.getHostString() + ":" + p.getPort());
-                            }
-    
-                            net.raphimc.viaproxy.ViaProxy.main(viaArgs.toArray(new String[0]));
-                        } catch (Throwable e) {
-                            e.printStackTrace();
+                    try {
+                        List<String> viaArgs = new ArrayList<>(Arrays.asList(
+                            "java",
+                            "-Xmx128M",
+                            "-cp", System.getProperty("java.class.path"),
+                            "net.raphimc.viaproxy.ViaProxy",
+                            "cli", 
+                            "--bind-address", "127.0.0.1:" + finalProxyPort, 
+                            "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort(),
+                            "--target-version", resolveVersionName(v)
+                        ));
+                        
+                        if (useProxies && proxyCount > 0) {
+                            InetSocketAddress p = proxies.get(random.nextInt(proxyCount));
+                            String scheme = proxyType.name().toLowerCase();
+                            if (scheme.equals("socks")) scheme = "socks5";
+                            viaArgs.add("--backend-proxy-url");
+                            viaArgs.add(scheme + "://" + p.getHostString() + ":" + p.getPort());
                         }
-                    });
-                    proxyThread.setDaemon(true);
-                    proxyThread.start();
+
+                        ProcessBuilder pb = new ProcessBuilder(viaArgs);
+                        pb.inheritIO();
+                        viaProcesses.add(pb.start());
+                    } catch (IOException e) {
+                        Log.error("Failed to start ViaProxy process: " + e.getMessage());
+                    }
                 }
                 
                 // Wait for all ViaProxy instances to start (up to 30 seconds)
