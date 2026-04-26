@@ -273,7 +273,7 @@ public class Main {
         if (cmd.hasOption("v")) {
             String v = cmd.getOptionValue("v");
             try {
-                Log.info("Older protocol requested. Starting ViaProxy translation layer...");
+                Log.info("Older protocol (" + v + ") requested. Starting ViaProxy translation layer...");
                 
                 // Find a free port
                 int proxyPort = 25566;
@@ -284,11 +284,22 @@ public class Main {
                 final int finalProxyPort = proxyPort;
                 Thread proxyThread = new Thread(() -> {
                     try {
-                        net.raphimc.viaproxy.ViaProxy.main(new String[]{
+                        List<String> viaArgs = new ArrayList<>(Arrays.asList(
                             "cli", 
                             "--bind-address", "127.0.0.1:" + finalProxyPort, 
-                            "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort()
-                        });
+                            "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort(),
+                            "--target-version", v
+                        ));
+                        
+                        if (useProxies && proxyCount > 0) {
+                            InetSocketAddress p = proxies.get(random.nextInt(proxyCount));
+                            String scheme = proxyType.name().toLowerCase();
+                            if (scheme.equals("socks")) scheme = "socks5";
+                            viaArgs.add("--backend-proxy-url");
+                            viaArgs.add(scheme + "://" + p.getHostString() + ":" + p.getPort());
+                        }
+
+                        net.raphimc.viaproxy.ViaProxy.main(viaArgs.toArray(new String[0]));
                     } catch (Throwable e) {
                         e.printStackTrace();
                     }
