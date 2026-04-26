@@ -323,7 +323,7 @@ public class Main {
                 Log.info("Older protocol (" + v + ") requested. Starting ViaProxy translation layer...");
                 
                 // Find free ports for a pool of ViaProxy instances
-                int poolSize = 5;
+                int poolSize = 3;
                 int[] proxyPorts = new int[poolSize];
                 for (int i = 0; i < poolSize; i++) {
                     try (ServerSocket s = new ServerSocket(0)) {
@@ -343,7 +343,7 @@ public class Main {
                     try {
                         List<String> viaArgs = new ArrayList<>(Arrays.asList(
                             "java",
-                            "-Xmx128M",
+                            "-Xmx256M",
                             "-cp", System.getProperty("java.class.path"),
                             "net.raphimc.viaproxy.ViaProxy",
                             "cli", 
