@@ -57,6 +57,8 @@ public class Main {
     private static int[] pooledProxyPorts;
     private static final List<Process> viaProcesses = new ArrayList<>();
     private static ProxyInfo.Type proxyType;
+    public static String originalHost;
+    public static int originalPort;
     private static final String CLIENT_ID = "8bef943e-5a63-429e-a93a-96391d2e32a9";
     
     private static String resolveVersionName(String version) {
@@ -309,19 +311,22 @@ public class Main {
             InetAddress.getByName(address).getHostAddress(),
             port
         );
-        InetSocketAddress originalAddr = inetAddr;
-
-        //print info
-        Log.info("IP:", inetAddr.getHostString());
-        Log.info("Port: " + inetAddr.getPort());
-        Log.info("Bot count: " + botCount);
-
         //get and print server info
+        InetSocketAddress targetAddr = inetAddr;
         if (cmd.hasOption("v")) {
             String v = cmd.getOptionValue("v");
             try {
                 Log.info("Older protocol (" + v + ") requested. Starting ViaProxy translation layer...");
                 
+                int multiplexerPort = -1;
+                if (useProxies && proxyCount > 0) {
+                    Log.info("Starting local proxy multiplexer for " + proxyCount + " proxies...");
+                    ProxyMultiplexer multiplexer = new ProxyMultiplexer(proxies, proxyType.name());
+                    multiplexer.start();
+                    multiplexerPort = multiplexer.getPort();
+                    Log.info("Multiplexer started on port " + multiplexerPort);
+                }
+
                 // Find free ports for a pool of ViaProxy instances
                 int poolSize = 3;
                 int[] proxyPorts = new int[poolSize];
@@ -348,16 +353,13 @@ public class Main {
                             "net.raphimc.viaproxy.ViaProxy",
                             "cli", 
                             "--bind-address", "127.0.0.1:" + finalProxyPort, 
-                            "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort(),
+                            "--target-address", address + ":" + port,
                             "--target-version", resolveVersionName(v)
                         ));
                         
-                        if (useProxies && proxyCount > 0) {
-                            InetSocketAddress p = proxies.get(random.nextInt(proxyCount));
-                            String scheme = proxyType.name().toLowerCase();
-                            if (scheme.equals("socks")) scheme = "socks5";
+                        if (multiplexerPort != -1) {
                             viaArgs.add("--backend-proxy-url");
-                            viaArgs.add(scheme + "://" + p.getHostString() + ":" + p.getPort());
+                            viaArgs.add("socks5://127.0.0.1:" + multiplexerPort);
                         }
 
                         ProcessBuilder pb = new ProcessBuilder(viaArgs);
