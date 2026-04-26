@@ -54,6 +54,7 @@ public class Main {
     private static final ArrayList<InetSocketAddress> proxies = new ArrayList<>();
     private static int proxyIndex = 0;
     private static int proxyCount = 0;
+    private static int[] pooledProxyPorts;
     private static ProxyInfo.Type proxyType;
 
     private static final String CLIENT_ID = "8bef943e-5a63-429e-a93a-96391d2e32a9";
@@ -321,59 +322,64 @@ public class Main {
             try {
                 Log.info("Older protocol (" + v + ") requested. Starting ViaProxy translation layer...");
                 
-                // Find a free port
-                int proxyPort = 25566;
-                try (ServerSocket s = new ServerSocket(0)) {
-                    proxyPort = s.getLocalPort();
+                // Find free ports for a pool of ViaProxy instances
+                int poolSize = 5;
+                int[] proxyPorts = new int[poolSize];
+                for (int i = 0; i < poolSize; i++) {
+                    try (ServerSocket s = new ServerSocket(0)) {
+                        proxyPorts[i] = s.getLocalPort();
+                    }
                 }
                 
-                final int finalProxyPort = proxyPort;
-                Thread proxyThread = new Thread(() -> {
-                    try {
-                        List<String> viaArgs = new ArrayList<>(Arrays.asList(
-                            "cli", 
-                            "--bind-address", "127.0.0.1:" + finalProxyPort, 
-                            "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort(),
-                            "--target-version", resolveVersionName(v)
-                        ));
-                        
-                        if (useProxies && proxyCount > 0) {
-                            InetSocketAddress p = proxies.get(random.nextInt(proxyCount));
-                            String scheme = proxyType.name().toLowerCase();
-                            if (scheme.equals("socks")) scheme = "socks5";
-                            viaArgs.add("--backend-proxy-url");
-                            viaArgs.add(scheme + "://" + p.getHostString() + ":" + p.getPort());
+                for (int i = 0; i < poolSize; i++) {
+                    final int finalProxyPort = proxyPorts[i];
+                    Thread proxyThread = new Thread(() -> {
+                        try {
+                            List<String> viaArgs = new ArrayList<>(Arrays.asList(
+                                "cli", 
+                                "--bind-address", "127.0.0.1:" + finalProxyPort, 
+                                "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort(),
+                                "--target-version", resolveVersionName(v)
+                            ));
+                            
+                            if (useProxies && proxyCount > 0) {
+                                InetSocketAddress p = proxies.get(random.nextInt(proxyCount));
+                                String scheme = proxyType.name().toLowerCase();
+                                if (scheme.equals("socks")) scheme = "socks5";
+                                viaArgs.add("--backend-proxy-url");
+                                viaArgs.add(scheme + "://" + p.getHostString() + ":" + p.getPort());
+                            }
+    
+                            net.raphimc.viaproxy.ViaProxy.main(viaArgs.toArray(new String[0]));
+                        } catch (Throwable e) {
+                            e.printStackTrace();
                         }
-
-                        net.raphimc.viaproxy.ViaProxy.main(viaArgs.toArray(new String[0]));
-                    } catch (Throwable e) {
-                        e.printStackTrace();
-                    }
-                });
-                proxyThread.setDaemon(true);
-                proxyThread.start();
+                    });
+                    proxyThread.setDaemon(true);
+                    proxyThread.start();
+                }
                 
-                // Wait for ViaProxy to start (up to 30 seconds)
-                Log.info("Waiting for ViaProxy to start (this may take a few seconds)...");
-                boolean isUp = false;
-                for (int j = 0; j < 60; j++) {
-                    try (Socket socket = new Socket()) {
-                        socket.connect(new InetSocketAddress("127.0.0.1", proxyPort), 500);
-                        isUp = true;
-                        break;
-                    } catch (IOException ignored) {
-                        Thread.sleep(500);
+                // Wait for all ViaProxy instances to start (up to 30 seconds)
+                Log.info("Waiting for ViaProxy pool (" + poolSize + " instances) to start...");
+                for (int i = 0; i < poolSize; i++) {
+                    boolean isUp = false;
+                    for (int j = 0; j < 60; j++) {
+                        try (Socket socket = new Socket()) {
+                            socket.connect(new InetSocketAddress("127.0.0.1", proxyPorts[i]), 500);
+                            isUp = true;
+                            break;
+                        } catch (IOException ignored) {
+                            Thread.sleep(500);
+                        }
+                    }
+                    if (!isUp) {
+                        Log.error("ViaProxy instance " + i + " failed to start on port " + proxyPorts[i]);
                     }
                 }
                 
-                if (!isUp) {
-                    Log.error("ViaProxy failed to start or bind to port " + proxyPort + " within 30 seconds.");
-                    System.exit(1);
-                }
-                
-                // Re-route bot connection to ViaProxy
-                inetAddr = new InetSocketAddress("127.0.0.1", proxyPort);
-                Log.info("ViaProxy started. Bots will route through 127.0.0.1:" + proxyPort);
+                // Bots will be distributed among these ports
+                pooledProxyPorts = proxyPorts;
+                Log.info("ViaProxy pool started successfully.");
                 
             } catch (Exception e) {
                 Log.error("Failed to start ViaProxy: " + e.getMessage());
@@ -424,6 +430,7 @@ public class Main {
         final PacketCodec finalCodec = codec;
         final InetSocketAddress finalInetAddr = inetAddr;
         final boolean hasVOption = cmd != null && cmd.hasOption("v");
+        final int[] finalPoolPorts = pooledProxyPorts;
 
         new Thread(() -> {
             for (int i = 0; i < botCount; i++) {
@@ -452,20 +459,25 @@ public class Main {
                         }
 
                     } else if (useProxies && hasVOption && i == 0 && !minimal) {
-                        Log.info("Bots will connect locally to ViaProxy. ViaProxy will use a single proxy for all connections.");
+                        Log.info("Bots will connect locally to ViaProxy pool. Each bot will use one of " + finalPoolPorts.length + " instances.");
+                    }
+
+                    InetSocketAddress botTarget = finalInetAddr;
+                    if (hasVOption && finalPoolPorts != null) {
+                        botTarget = new InetSocketAddress("127.0.0.1", finalPoolPorts[i % finalPoolPorts.length]);
                     }
 
                     Bot bot = null;
                     if (protocol != null) {
                         bot = new Bot(
                                 protocol,
-                                finalInetAddr,
+                                botTarget,
                                 proxyInfo
                         );
                     } else {
                         bot = new Bot(
                                 new MinecraftProtocol(finalCodec, nickGen.nextNick()),
-                                finalInetAddr,
+                                botTarget,
                                 proxyInfo
                         );
                     }
