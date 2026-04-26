@@ -269,28 +269,10 @@ public class Main {
         Log.info("Bot count: " + botCount);
 
         //get and print server info
-        ServerInfo serverInfo = new ServerInfo(inetAddr);
-        serverInfo.requestInfo();
-        ServerStatusInfo statusInfo = serverInfo.getStatusInfo();
-        if (statusInfo != null) {
-            Log.info(
-                    "Server version: "
-                            + statusInfo.getVersionInfo().getVersionName()
-                            + " (" + statusInfo.getVersionInfo().getProtocolVersion()
-                            + ")"
-            );
-            Log.info("Player Count: " + statusInfo.getPlayerInfo().getOnlinePlayers()
-                    + " / " + statusInfo.getPlayerInfo().getMaxPlayers());
-            Log.info();
-        } else {
-            Log.warn("There was an error retrieving server status information. The server may be offline or running on a different version.");
-        }
-
-        PacketCodec codec = MinecraftCodec.CODEC;
+        InetSocketAddress originalAddr = inetAddr;
         if (cmd.hasOption("v")) {
             String v = cmd.getOptionValue("v");
             try {
-                int protocolVersion = Integer.parseInt(v);
                 Log.info("Older protocol requested. Starting ViaProxy translation layer...");
                 
                 // Find a free port
@@ -321,14 +303,30 @@ public class Main {
                 inetAddr = new InetSocketAddress("127.0.0.1", proxyPort);
                 Log.info("ViaProxy started. Bots will route through 127.0.0.1:" + proxyPort);
                 
-            } catch (NumberFormatException e) {
-                Log.error("Invalid protocol version: " + v + ". Provide an integer.");
-                System.exit(1);
             } catch (Exception e) {
                 Log.error("Failed to start ViaProxy: " + e.getMessage());
                 System.exit(1);
             }
         }
+        //get and print server info
+        ServerInfo serverInfo = new ServerInfo(inetAddr);
+        serverInfo.requestInfo();
+        ServerStatusInfo statusInfo = serverInfo.getStatusInfo();
+        if (statusInfo != null) {
+            Log.info(
+                    "Server version: "
+                            + statusInfo.getVersionInfo().getVersionName()
+                            + " (" + statusInfo.getVersionInfo().getProtocolVersion()
+                            + ")"
+            );
+            Log.info("Player Count: " + statusInfo.getPlayerInfo().getOnlinePlayers()
+                    + " / " + statusInfo.getPlayerInfo().getMaxPlayers());
+            Log.info();
+        } else {
+            Log.warn("There was an error retrieving server status information. The server may be offline or running on a different version.");
+        }
+
+        PacketCodec codec = MinecraftCodec.CODEC;
 
         MinecraftProtocol protocol;
         if (cmd.hasOption("o")) {
