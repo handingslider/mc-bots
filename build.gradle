@@ -10,6 +10,9 @@ repositories {
     maven { url 'https://jitpack.io' }
     maven { url 'https://repo.opencollab.dev/maven-snapshots/' }
     maven { url 'https://repo.opencollab.dev/maven-releases/' }
+    maven { url 'https://repo.viaversion.com/' }
+    maven { url 'https://maven.lenni0451.net/everything' }
+    maven { url 'https://libraries.minecraft.net/' }
 }
 
 dependencies {
@@ -20,6 +23,7 @@ dependencies {
     implementation 'dnsjava:dnsjava:3.5.3'
     implementation 'org.slf4j:slf4j-nop:2.0.17'
     implementation 'org.jline:jline:3.30.4'
+    implementation 'net.raphimc:ViaProxy:3.4.10'
 }
 
 java {

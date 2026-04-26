@@ -261,6 +261,7 @@ public class Main {
             InetAddress.getByName(address).getHostAddress(),
             port
         );
+        InetSocketAddress originalAddr = inetAddr;
 
         //print info
         Log.info("IP:", inetAddr.getHostString());
@@ -290,10 +291,41 @@ public class Main {
             String v = cmd.getOptionValue("v");
             try {
                 int protocolVersion = Integer.parseInt(v);
-                codec = codec.toBuilder().protocolVersion(protocolVersion).minecraftVersion(v).build();
-                Log.info("Using protocol version: " + protocolVersion);
+                Log.info("Older protocol requested. Starting ViaProxy translation layer...");
+                
+                // Find a free port
+                int proxyPort = 25566;
+                try (ServerSocket s = new ServerSocket(0)) {
+                    proxyPort = s.getLocalPort();
+                }
+                
+                final int finalProxyPort = proxyPort;
+                Thread proxyThread = new Thread(() -> {
+                    try {
+                        net.raphimc.viaproxy.ViaProxy.main(new String[]{
+                            "cli", 
+                            "--bind-address", "127.0.0.1:" + finalProxyPort, 
+                            "--target-address", originalAddr.getHostString() + ":" + originalAddr.getPort()
+                        });
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                    }
+                });
+                proxyThread.setDaemon(true);
+                proxyThread.start();
+                
+                // Wait for ViaProxy to start
+                Thread.sleep(2000);
+                
+                // Re-route bot connection to ViaProxy
+                inetAddr = new InetSocketAddress("127.0.0.1", proxyPort);
+                Log.info("ViaProxy started. Bots will route through 127.0.0.1:" + proxyPort);
+                
             } catch (NumberFormatException e) {
                 Log.error("Invalid protocol version: " + v + ". Provide an integer.");
+                System.exit(1);
+            } catch (Exception e) {
+                Log.error("Failed to start ViaProxy: " + e.getMessage());
                 System.exit(1);
             }
         }
@@ -320,6 +352,7 @@ public class Main {
         }
 
         final PacketCodec finalCodec = codec;
+        final InetSocketAddress finalInetAddr = inetAddr;
 
         new Thread(() -> {
             for (int i = 0; i < botCount; i++) {
@@ -353,13 +386,13 @@ public class Main {
                     if (protocol != null) {
                         bot = new Bot(
                                 protocol,
-                                inetAddr,
+                                finalInetAddr,
                                 proxyInfo
                         );
                     } else {
                         bot = new Bot(
                                 new MinecraftProtocol(finalCodec, nickGen.nextNick()),
-                                inetAddr,
+                                finalInetAddr,
                                 proxyInfo
                         );
                     }
