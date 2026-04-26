@@ -296,8 +296,23 @@ public class Main {
                 proxyThread.setDaemon(true);
                 proxyThread.start();
                 
-                // Wait for ViaProxy to start
-                Thread.sleep(2000);
+                // Wait for ViaProxy to start (up to 30 seconds)
+                Log.info("Waiting for ViaProxy to start (this may take a few seconds)...");
+                boolean isUp = false;
+                for (int j = 0; j < 60; j++) {
+                    try (Socket socket = new Socket()) {
+                        socket.connect(new InetSocketAddress("127.0.0.1", proxyPort), 500);
+                        isUp = true;
+                        break;
+                    } catch (IOException ignored) {
+                        Thread.sleep(500);
+                    }
+                }
+                
+                if (!isUp) {
+                    Log.error("ViaProxy failed to start or bind to port " + proxyPort + " within 30 seconds.");
+                    System.exit(1);
+                }
                 
                 // Re-route bot connection to ViaProxy
                 inetAddr = new InetSocketAddress("127.0.0.1", proxyPort);
@@ -351,12 +366,13 @@ public class Main {
 
         final PacketCodec finalCodec = codec;
         final InetSocketAddress finalInetAddr = inetAddr;
+        final boolean hasVOption = cmd != null && cmd.hasOption("v");
 
         new Thread(() -> {
             for (int i = 0; i < botCount; i++) {
                 try {
                     ProxyInfo proxyInfo = null;
-                    if (useProxies) {
+                    if (useProxies && !hasVOption) {
                         InetSocketAddress proxySocket = proxies.get(proxyIndex);
 
                         if (!minimal) {
@@ -378,6 +394,8 @@ public class Main {
                             proxyIndex = 0;
                         }
 
+                    } else if (useProxies && hasVOption && i == 0 && !minimal) {
+                        Log.info("Bots will connect locally to ViaProxy. ViaProxy will use a single proxy for all connections.");
                     }
 
                     Bot bot = null;
@@ -429,6 +447,20 @@ public class Main {
             }, 1000L, 500L);
         }
 
+        if (cmd.hasOption("v")) {
+            Log.warn("Interactive bot control is disabled because ViaProxy has hijacked the terminal.");
+            Log.warn("The program will exit automatically once all bots disconnect.");
+            Log.warn("Press Ctrl+C to stop the bots manually.");
+            while (triedToConnect < botCount || !bots.isEmpty()) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    System.exit(0);
+                }
+            }
+            System.exit(0);
+        }
+
         Terminal terminal = TerminalBuilder.builder().build();
         LineReader lineReader = LineReaderBuilder.builder()
                 .terminal(terminal)
@@ -441,7 +473,7 @@ public class Main {
             String line;
             try {
                 line = lineReader.readLine();
-            } catch (UserInterruptException e) {
+            } catch (UserInterruptException | org.jline.reader.EndOfFileException e) {
                 System.exit(0);
                 break;
             }
